@@ -43,6 +43,14 @@ const run = async () => {
             res.send(result);
         });
 
+        // Get single user api
+        app.get('/user', async (req, res) => {
+            const email = req.query.email;
+            const query = { email: email }
+            const user = await usersCollection.findOne(query);
+            res.send(user);
+        });
+
         // find friend api
         app.get('/find-people', async (req, res) => {
             const email = req.query.email;
@@ -69,14 +77,66 @@ const run = async () => {
         });
 
         //  Get all requested friends
-        app.get('/sr-friends', async (req, res) => {
+        app.get('/requested-friends', async (req, res) => {
             const { email } = req.query;
             const friends = await friendsCollection.find().toArray();
             const result = friends.filter(friend => friend.friendship.includes(email)).filter(f => f.status === 'pending');
             res.send(result);
         })
 
+        // Send Friend Request
+        app.post('/send-request', async (req, res) => {
+            const { currentUser, requestedPerson, conversationId } = req.body;
+            const friend = {
+                friendship: [currentUser.email, requestedPerson.email],
+                requester: currentUser.email,
+                receiver: requestedPerson.email,
+                users: [
+                    currentUser, requestedPerson
+                ],
+                status: 'pending',
+                timestamp: new Date().getTime(),
+                conversationId
+            }
+            const friends = await friendsCollection.find().toArray();
+            const isExist = friends.find(f => f.friendship.includes(currentUser.email) && f.friendship.includes(requestedPerson.email));
+            if (isExist) {
+                res.send({ message: 'Already Added' });
+            }
+            else {
+                const result = await friendsCollection.insertOne(friend);
+                const newFriend = await friendsCollection.findOne({ _id: ObjectId(result.insertedId) });
+                io.emit('newFriendReq', newFriend);
+                res.send(result);
+            }
+        });
 
+        // Accept Friend Request
+        app.put('/accept/:id', async (req, res) => {
+            const { id } = req.params;
+            const filter = { _id: ObjectId(id) }
+            const updateDoc = { status: 'friend' }
+            const unsetProperty = { requester: '', receiver: '', timestamp: '' }
+            const result = await friendsCollection.updateOne(filter, { $set: updateDoc, $unset: unsetProperty });
+            res.send(result);
+        });
+
+        // Cancel Friend friend Request
+        app.delete('/cancel/:id', async (req, res) => {
+            const { id } = req.params;
+            const query = { _id: ObjectId(id) }
+            const result = await friendsCollection.deleteOne(query)
+            res.send(result);
+        })
+
+        // Get all friends
+        app.get('/friends', async (req, res) => {
+            const { email } = req.query;
+            // console.log(email);
+            const filter = { friendship: email, status: 'friend' }
+            const result = await friendsCollection.find(filter).limit(3).toArray();
+            res.send(result)
+        });
 
     }
     catch (err) {
