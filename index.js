@@ -35,6 +35,7 @@ const run = async () => {
         const db = client.db("chat_application_DB");
         const usersCollection = db.collection('users');
         const friendsCollection = db.collection('friends');
+        const conversationsCollection = db.collection('conversations');
 
         // Add user api
         app.post('/users', async (req, res) => {
@@ -111,6 +112,15 @@ const run = async () => {
             }
         });
 
+        // Get friend requests
+        app.get('/friend-request', async (req, res) => {
+            const { email } = req.query;
+            const query = { receiver: email };
+            const users = await friendsCollection.find(query).toArray()
+            const result = users.filter(user => user.status === 'pending');
+            res.send(result);
+        });
+
         // Accept Friend Request
         app.put('/accept/:id', async (req, res) => {
             const { id } = req.params;
@@ -137,6 +147,20 @@ const run = async () => {
             const result = await friendsCollection.find(filter).limit(3).toArray();
             res.send(result)
         });
+
+
+        // Add conversation
+        app.post('/conversations', async (req, res) => {
+            try {
+                const conversation = req.body;
+                const result = await conversationsCollection.insertOne(conversation);
+                io.emit('conversation', conversation);
+                res.send(result);
+            }
+            catch (err) {
+                res.send({ message: 'Internal server error' })
+            }
+        })
 
     }
     catch (err) {
