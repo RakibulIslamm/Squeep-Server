@@ -144,7 +144,7 @@ const run = async () => {
             const { email } = req.query;
             // console.log(email);
             const filter = { friendship: email, status: 'friend' }
-            const result = await friendsCollection.find(filter).limit(3).toArray();
+            const result = await friendsCollection.find(filter).toArray();
             res.send(result)
         });
 
@@ -160,6 +160,21 @@ const run = async () => {
             catch (err) {
                 res.send({ message: 'Internal server error' })
             }
+        });
+
+        // Update conversation friend status
+        app.put('/conversation-status/:id', async (req, res) => {
+            const { id } = req.params;
+            const isFriend = req.body;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    isFriend: isFriend.isFriend
+                }
+            }
+            const result = await conversationsCollection.updateOne(filter, updatedDoc);
+            res.send(result)
+
         })
 
     }
