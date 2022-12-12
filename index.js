@@ -116,7 +116,10 @@ const run = async () => {
         app.get('/friend-request', async (req, res) => {
             const { email } = req.query;
             const query = { receiver: email };
-            const users = await friendsCollection.find(query).toArray()
+            const users = await friendsCollection
+                .find(query)
+                .sort({ timestamp: -1 })
+                .toArray();
             const result = users.filter(user => user.status === 'pending');
             res.send(result);
         });
@@ -175,7 +178,15 @@ const run = async () => {
             const result = await conversationsCollection.updateOne(filter, updatedDoc);
             res.send(result)
 
-        })
+        });
+
+        // Get conversations
+        app.get('/conversations', async (req, res) => {
+            const { email } = req.query;
+            const filter = { users: { $elemMatch: { email: email } }, isFriend: true };
+            const result = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
+            res.send(result);
+        });
 
     }
     catch (err) {
