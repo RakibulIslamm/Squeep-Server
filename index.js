@@ -36,6 +36,7 @@ const run = async () => {
         const usersCollection = db.collection('users');
         const friendsCollection = db.collection('friends');
         const conversationsCollection = db.collection('conversations');
+        const messagesCollection = db.collection('messages');
 
         // Add user api
         app.post('/users', async (req, res) => {
@@ -172,7 +173,8 @@ const run = async () => {
             const filter = { _id: ObjectId(id) };
             const updatedDoc = {
                 $set: {
-                    isFriend: isFriend.isFriend
+                    isFriend: isFriend.isFriend,
+                    timestamp: new Date().getTime()
                 }
             }
             const result = await conversationsCollection.updateOne(filter, updatedDoc);
@@ -185,6 +187,14 @@ const run = async () => {
             const { email } = req.query;
             const filter = { users: { $elemMatch: { email: email } }, isFriend: true };
             const result = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
+            res.send(result);
+        });
+
+        // Get Messages
+        app.get('/messages', async (req, res) => {
+            const { conversationId } = req.query;
+            const filter = { conversationId: conversationId }
+            const result = await messagesCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
             res.send(result);
         });
 
