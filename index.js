@@ -190,6 +190,32 @@ const run = async () => {
             res.send(result);
         });
 
+        // Update conversation last message
+        app.put('/conversations/:id', async (req, res) => {
+            const { id } = req.params;
+            const data = req.body;
+            const filter = { _id: ObjectId(id) };
+            const conversation = await conversationsCollection.findOne(filter);
+            const updatedDoc = {
+                $set: {
+                    lastMessage: data.messageText,
+                    sender: data.email,
+                    timestamp: data.timestamp,
+                    unseenMessages: conversation.unseenMessages + 1
+                }
+            }
+            const result = await conversationsCollection.updateOne(filter, updatedDoc);
+            res.send(result)
+
+        })
+
+        // Get single conversation by id
+        app.get('/conversation/:id', async (req, res) => {
+            const { id } = req.params;
+            const result = await conversationsCollection.findOne({ _id: ObjectId(id) });
+            res.send(result);
+        });
+
         // Get Messages
         app.get('/messages', async (req, res) => {
             const { conversationId } = req.query;
