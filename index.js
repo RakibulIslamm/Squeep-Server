@@ -175,7 +175,7 @@ const run = async () => {
                 }
             });
 
-            // Update conversation friend status
+            // Update conversation status
             app.put('/conversation-status/:id', async (req, res) => {
                 const { id } = req.params;
                 const isFriend = req.body;
@@ -233,7 +233,19 @@ const run = async () => {
                 res.send(result);
             });
 
-        })
+            // Send Message
+            socket.on('getMessage', async (messageInfo) => {
+                try {
+                    const message = messageInfo;
+                    io.emit("message", messageInfo);
+                    const result = await messagesCollection.insertOne(message);
+                    io.emit("messageResult", result);
+                }
+                catch (err) {
+
+                }
+            })
+        });
 
     }
     catch (err) {
