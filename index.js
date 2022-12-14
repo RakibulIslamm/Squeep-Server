@@ -1,5 +1,6 @@
 const express = require('express');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const ObjectID = require('mongodb').ObjectID;
 require('dotenv').config();
 const cors = require('cors');
 const http = require('http');
@@ -187,6 +188,8 @@ const run = async () => {
                     }
                 }
                 const result = await conversationsCollection.updateOne(filter, updatedDoc);
+                const conversation = await conversationsCollection.findOne(filter);
+                io.emit("conversation", conversation);
                 res.send(result)
 
             });
@@ -214,6 +217,10 @@ const run = async () => {
                     }
                 }
                 const result = await conversationsCollection.updateOne(filter, updatedDoc);
+                console.log(result);
+                if (result.modifiedCount) {
+                    io.emit("updateConversation", ({ data, id }));
+                }
                 res.send(result)
 
             })
@@ -227,18 +234,27 @@ const run = async () => {
 
             // Get Messages
             app.get('/messages', async (req, res) => {
-                const { conversationId } = req.query;
-                const filter = { conversationId: conversationId }
-                const result = await messagesCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
-                res.send(result);
+                try {
+                    const { conversationId } = req.query;
+                    const filter = { conversationId: conversationId }
+                    const isExist = await conversationsCollection.findOne({ _id: ObjectId(conversationId) });
+                    if (isExist == null) {
+                        throw "Not found";
+                    };
+                    const result = await messagesCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
+                    res.send(result);
+                }
+                catch (err) {
+                    res.send(err);
+                }
             });
 
             // Send Message
             socket.on('getMessage', async (messageInfo) => {
                 try {
                     const message = messageInfo;
-                    io.emit("message", messageInfo);
                     const result = await messagesCollection.insertOne(message);
+                    io.emit("message", messageInfo);
                     io.emit("messageResult", result);
                 }
                 catch (err) {
