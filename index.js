@@ -5,7 +5,7 @@ require('dotenv').config();
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-const { joinedUsers, disconnectedUsers, activeUsers } = require('./activeUsers');
+// const { activeUsers } = require('./activeUsers');
 
 
 const app = express();
@@ -25,6 +25,8 @@ const io = new Server(expressServer, {
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.qvyuz.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
+const activeUsers = new Set();
+
 const run = async () => {
     try {
         await client.connect();
@@ -36,17 +38,20 @@ const run = async () => {
         const messagesCollection = db.collection('messages');
 
         io.on("connection", (socket) => {
+            socket.on("new_user", function (data) {
+                socket.userId = data;
+                // const emailArr = [...activeUsers];
+                activeUsers.add(data);
 
-            socket.on('user', (user) => {
-                socket.email = user;
-                const activePeople = activeUsers({ connect: user });
-                console.log(activePeople)
-            })
-
-            socket.on('disconnect', () => {
-                const activePeople = activeUsers({ disconnect: socket.email });
-                console.log(activePeople)
+                io.emit("new_user", [...activeUsers]);
             });
+
+            socket.on("disconnect", () => {
+                activeUsers.delete(socket.userId);
+                io.emit("new_user", [...activeUsers]);
+            });
+
+
 
             // Add user api
             app.post('/users', async (req, res) => {
@@ -217,7 +222,7 @@ const run = async () => {
                     }
                 }
                 const result = await conversationsCollection.updateOne(filter, updatedDoc);
-                console.log(result);
+                // console.log(result);
                 if (result.modifiedCount) {
                     io.emit("updateConversation", ({ data, id }));
                 }
