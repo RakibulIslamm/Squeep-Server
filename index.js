@@ -37,6 +37,15 @@ const run = async () => {
         const conversationsCollection = db.collection('conversations');
         const messagesCollection = db.collection('messages');
 
+        // const nsp = io.of("/abc");
+
+        // nsp.on("connection", socket => {
+        //     console.log("someone connected");
+        // });
+
+        // nsp.emit("hi", "everyone!");
+
+
         io.on("connection", (socket) => {
             socket.on("new_user", function (data) {
                 socket.userId = data;
@@ -206,6 +215,15 @@ const run = async () => {
                 const result = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
                 res.send(result);
             });
+
+            // Get Searched Conversations
+            app.get('/search-conversations', async (req, res) => {
+                const { search, email } = req.query;
+                const filter = { users: { $elemMatch: { email: email } }, isFriend: true };
+                const conversations = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
+                const result = conversations.filter(conversation => conversation.users.find(user => user.email !== email).name.toLowerCase().includes(search.toLocaleLowerCase()));
+                res.send(result);
+            })
 
             // Update conversation last message
             app.put('/conversations/:id', async (req, res) => {
