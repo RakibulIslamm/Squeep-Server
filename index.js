@@ -37,15 +37,6 @@ const run = async () => {
         const conversationsCollection = db.collection('conversations');
         const messagesCollection = db.collection('messages');
 
-        // const nsp = io.of("/abc");
-
-        // nsp.on("connection", socket => {
-        //     console.log("someone connected");
-        // });
-
-        // nsp.emit("hi", "everyone!");
-
-
         io.on("connection", (socket) => {
             socket.on("new_user", function (data) {
                 socket.userId = data;
