@@ -1,6 +1,5 @@
 const express = require('express');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const ObjectID = require('mongodb').ObjectID;
 require('dotenv').config();
 const cors = require('cors');
 const http = require('http');
@@ -264,17 +263,43 @@ const run = async () => {
             });
 
             // Send Message
-            socket.on('getMessage', async (messageInfo) => {
+            // socket.on('getMessage', async (messageInfo) => {
+            //     try {
+            //         const message = messageInfo;
+            //         const result = await messagesCollection.insertOne(message);
+            //         io.emit("message", messageInfo);
+            //         io.emit("messageResult", result);
+            //     }
+            //     catch (err) {
+
+            //     }
+            // })
+
+            app.post('/send-message', async (req, res) => {
                 try {
-                    const message = messageInfo;
+                    const message = req.body;
+                    // console.log(message);
                     const result = await messagesCollection.insertOne(message);
-                    io.emit("message", messageInfo);
-                    io.emit("messageResult", result);
+                    if (result.insertedId) {
+                        res.send(result);
+                        io.emit("message", message);
+                    }
                 }
                 catch (err) {
 
                 }
-            })
+            });
+            // Handle message Notification
+            socket.on('message-notification', async (id) => {
+                const filter = { _id: ObjectId(id) };
+                const updatedDoc = {
+                    $set: {
+                        unseenMessages: 0
+                    }
+                }
+                const result = await conversationsCollection.updateOne(filter, updatedDoc);
+                io.emit('message-notification-update', { result, id });
+            });
         });
 
     }
