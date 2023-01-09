@@ -83,6 +83,23 @@ const run = async () => {
                     throw new Error(err);
                 }
             })
+            // Update profile Photo
+            app.post('/update-profile-photo/:id', async (req, res) => {
+                const { id } = req.params;
+                const filter = { _id: ObjectId(id) };
+                const updatedDoc = {
+                    $set: {
+                        img: req.body.img
+                    }
+                }
+                try {
+                    const result = await usersCollection.updateOne(filter, updatedDoc);
+                    res.send(result);
+                }
+                catch (err) {
+                    throw new Error(err);
+                }
+            })
 
             // find friend api
             app.get('/find-people', async (req, res) => {
