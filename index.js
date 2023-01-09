@@ -21,6 +21,7 @@ const io = new Server(expressServer, {
     }
 });
 
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.qvyuz.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
@@ -66,6 +67,22 @@ const run = async () => {
                 const user = await usersCollection.findOne(query);
                 res.send(user);
             });
+
+            // Update profile
+            app.post('/update-profile/:id', async (req, res) => {
+                const { id } = req.params;
+                const filter = { _id: ObjectId(id) };
+                const updatedDoc = {
+                    $set: req.body
+                }
+                try {
+                    const result = await usersCollection.updateOne(filter, updatedDoc);
+                    res.send(result);
+                }
+                catch (err) {
+                    throw new Error(err);
+                }
+            })
 
             // find friend api
             app.get('/find-people', async (req, res) => {
@@ -191,7 +208,7 @@ const run = async () => {
                         timestamp: new Date().getTime()
                     }
                 }
-                const result = await conversationsCollection.updateOne(filter, updatedDoc);
+                const result = await conversationsCollection.updateOne(filter, updatedDoc, { upsert: true });
                 const conversation = await conversationsCollection.findOne(filter);
                 io.emit("conversation", conversation);
                 res.send(result)
