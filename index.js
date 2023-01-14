@@ -4,7 +4,6 @@ require('dotenv').config();
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-// const { activeUsers } = require('./activeUsers');
 
 
 const app = express();
@@ -38,13 +37,25 @@ const run = async () => {
         const messagesCollection = db.collection('messages');
 
         io.on("connection", (socket) => {
-            socket.on("new_user", function (data) {
-                socket.userId = data;
+
+
+            socket.on('join', function (data) {
+                // console.log(data);
+                // io.emit('welcome', { mesage: `Welcome back ${data}` })
+            });
+
+            socket.on("new_user", function (email) {
+                socket.userId = email;
                 // const emailArr = [...activeUsers];
-                activeUsers.add(data);
+                activeUsers.add(email);
 
                 io.emit("new_user", [...activeUsers]);
             });
+
+            socket.on('leavedUser', email => {
+                activeUsers.delete(email);
+                io.emit("new_user", [...activeUsers]);
+            })
 
             socket.on("disconnect", () => {
                 activeUsers.delete(socket.userId);
@@ -254,13 +265,13 @@ const run = async () => {
                 const { id } = req.params;
                 const data = req.body;
                 const filter = { _id: ObjectId(id) };
-                const conversation = await conversationsCollection.findOne(filter);
                 const updatedDoc = {
                     $set: {
                         lastMessage: data.messageText,
                         sender: data.email,
                         timestamp: data.timestamp,
-                        unseenMessages: conversation.unseenMessages + 1
+                        img: data.img,
+                        unseenMessages: data.unseenMessages + 1
                     }
                 }
                 const result = await conversationsCollection.updateOne(filter, updatedDoc);
@@ -325,6 +336,7 @@ const run = async () => {
             });
             // Handle message Notification
             socket.on('message-notification', async (id) => {
+                // console.log(id);
                 const filter = { _id: ObjectId(id) };
                 const updatedDoc = {
                     $set: {
