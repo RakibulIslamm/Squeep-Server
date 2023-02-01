@@ -16,7 +16,7 @@ app.use(express.json());
 const expressServer = http.createServer(app);
 const io = new Server(expressServer, {
     cors: {
-        origin: "*"
+        origin: ["https://squeepp.web.app", 'http://localhost:3000']
     }
 });
 
