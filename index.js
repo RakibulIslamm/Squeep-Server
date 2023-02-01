@@ -16,7 +16,7 @@ app.use(express.json());
 const expressServer = http.createServer(app);
 const io = new Server(expressServer, {
     cors: {
-        origin: ['http://localhost:3000']
+        origin: "*"
     }
 });
 
@@ -55,6 +55,29 @@ const run = async () => {
             socket.on('leavedUser', email => {
                 activeUsers.delete(email);
                 io.emit("new_user", [...activeUsers]);
+            });
+
+            socket.on('room', room => {
+                socket.join(room)
+                socket.on('id', ({ peerId, videoCall, caller }) => {
+                    socket.to(room).emit('id', ({ peerId, videoCall, caller }));
+                })
+                socket.on('callEnd', data => {
+                    socket.to(room).emit('callEnd', data);
+                })
+                socket.on('callAnswered', data => {
+                    socket.to(room).emit('callAnswered', data);
+                })
+                socket.on('videoActive', data => {
+                    socket.to(room).emit('videoActive', data);
+                })
+                socket.on('users', data => {
+                    io.to(room).emit('users', data);
+                })
+            });
+
+            socket.on('typing', data => {
+                console.log(data);
             })
 
             socket.on("disconnect", () => {
@@ -75,6 +98,14 @@ const run = async () => {
             app.get('/user', async (req, res) => {
                 const email = req.query.email;
                 const query = { email: email }
+                const user = await usersCollection.findOne(query);
+                res.send(user);
+            });
+
+            // Get single user by username
+            app.get('/profile', async (req, res) => {
+                const username = req.query.username;
+                const query = { username: username }
                 const user = await usersCollection.findOne(query);
                 res.send(user);
             });
@@ -113,6 +144,29 @@ const run = async () => {
             })
 
             // find friend api
+            app.get('/new-people', async (req, res) => {
+                const email = req.query.email;
+                const query = { email: email };
+                const currentUser = await usersCollection.findOne(query);
+                if (currentUser) {
+                    const friends = await friendsCollection.find().toArray();
+                    const neFilter = friends.filter(user => user.friendship.includes(currentUser.email)).map(user => user.friendship.filter(eml => eml !== currentUser.email)).map(email => email[0]);
+                    const users = await usersCollection.find({ email: { $nin: [...neFilter, email] } }).limit(7).toArray();
+                    const result = users.map(user => {
+                        return {
+                            name: user.name,
+                            email: user.email,
+                            username: user.username,
+                            _id: user._id,
+                            img: user.img
+                        }
+                    });
+                    res.send(result);
+                }
+                else {
+                    res.send({ code: 404 });
+                }
+            });
             app.get('/find-people', async (req, res) => {
                 const email = req.query.email;
                 const query = { email: email };
