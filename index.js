@@ -151,7 +151,7 @@ const run = async () => {
                 if (currentUser) {
                     const friends = await friendsCollection.find().toArray();
                     const neFilter = friends.filter(user => user.friendship.includes(currentUser.email)).map(user => user.friendship.filter(eml => eml !== currentUser.email)).map(email => email[0]);
-                    const users = await usersCollection.find({ email: { $nin: [...neFilter, email] } }).limit(7).toArray();
+                    const users = await usersCollection.find({ email: { $nin: [...neFilter, email] } }).sort({ _id: 1 }).limit(7).toArray();
                     const result = users.map(user => {
                         return {
                             name: user.name,
