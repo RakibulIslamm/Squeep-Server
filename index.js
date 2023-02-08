@@ -21,7 +21,8 @@ app.use(express.json());
 const expressServer = http.createServer(app);
 const io = new Server(expressServer, {
     cors: {
-        origin: "*"
+        origin: "*",
+        credentials: true,
     }
 });
 
@@ -41,9 +42,192 @@ const run = async () => {
         const conversationsCollection = db.collection('conversations');
         const messagesCollection = db.collection('messages');
 
+        // Add user api
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+            const result = await usersCollection.insertOne(user);
+            res.send(result);
+        });
+
+        // Get single user api
+        app.get('/user', async (req, res) => {
+            const email = req.query.email;
+            const query = { email: email }
+            const user = await usersCollection.findOne(query);
+            res.send(user);
+        });
+
+        // Get single user by username
+        app.get('/profile', async (req, res) => {
+            const username = req.query.username;
+            const query = { username: username }
+            const user = await usersCollection.findOne(query);
+            res.send(user);
+        });
+
+        // Update profile
+        app.post('/update-profile/:id', async (req, res) => {
+            const { id } = req.params;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: req.body
+            }
+            try {
+                const result = await usersCollection.updateOne(filter, updatedDoc);
+                res.send(result);
+            }
+            catch (err) {
+                throw new Error(err);
+            }
+        })
+
+        // Update profile Photo
+        app.post('/update-profile-photo/:id', async (req, res) => {
+            const { id } = req.params;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    img: req.body.img
+                }
+            }
+            try {
+                const result = await usersCollection.updateOne(filter, updatedDoc);
+                res.send(result);
+            }
+            catch (err) {
+                throw new Error(err);
+            }
+        });
+
+        // find friend api
+        app.get('/new-people', async (req, res) => {
+            const email = req.query.email;
+            const query = { email: email };
+            const currentUser = await usersCollection.findOne(query);
+            if (currentUser) {
+                const friends = await friendsCollection.find().toArray();
+                const neFilter = friends.filter(user => user.friendship.includes(currentUser.email)).map(user => user.friendship.filter(eml => eml !== currentUser.email)).map(email => email[0]);
+                const users = await usersCollection.find({ email: { $nin: [...neFilter, email] } }).sort({ _id: -1 }).limit(7).toArray();
+                const result = users.map(user => {
+                    return {
+                        name: user.name,
+                        email: user.email,
+                        username: user.username,
+                        _id: user._id,
+                        img: user.img
+                    }
+                });
+                res.send(result);
+            }
+            else {
+                res.send({ code: 404 });
+            }
+        });
+        app.get('/find-people', async (req, res) => {
+            const email = req.query.email;
+            const query = { email: email };
+            const currentUser = await usersCollection.findOne(query);
+            if (currentUser) {
+                const friends = await friendsCollection.find().toArray();
+                const neFilter = friends.filter(user => user.friendship.includes(currentUser.email)).map(user => user.friendship.filter(eml => eml !== currentUser.email)).map(email => email[0]);
+                const users = await usersCollection.find({ email: { $nin: [...neFilter, email] } }).toArray();
+                const result = users.map(user => {
+                    return {
+                        name: user.name,
+                        email: user.email,
+                        username: user.username,
+                        _id: user._id,
+                        img: user.img
+                    }
+                });
+                res.send(result);
+            }
+            else {
+                res.send({ code: 404 });
+            }
+        });
+
+        // Get friend requests
+        app.get('/friend-request', async (req, res) => {
+            const { email } = req.query;
+            const query = { receiver: email };
+            const users = await friendsCollection
+                .find(query)
+                .sort({ timestamp: -1 })
+                .toArray();
+            const result = users.filter(user => user.status === 'pending');
+            res.send(result);
+        });
+
+        // Accept Friend Request
+        app.put('/accept/:id', async (req, res) => {
+            const { id } = req.params;
+            const filter = { _id: ObjectId(id) }
+            const updateDoc = { status: 'friend' }
+            const unsetProperty = { requester: '', receiver: '', timestamp: '' }
+            const result = await friendsCollection.updateOne(filter, { $set: updateDoc, $unset: unsetProperty });
+            res.send(result);
+        });
+
+        // Cancel Friend friend Request
+        app.delete('/cancel/:id', async (req, res) => {
+            const { id } = req.params;
+            const query = { _id: ObjectId(id) }
+            const result = await friendsCollection.deleteOne(query)
+            res.send(result);
+        })
+
+        // Get all friends
+        app.get('/friends', async (req, res) => {
+            const { email } = req.query;
+            // console.log(email);
+            const filter = { friendship: email, status: 'friend' }
+            const result = await friendsCollection.find(filter).toArray();
+            res.send(result)
+        });
+
+        // Get conversations
+        app.get('/conversations', async (req, res) => {
+            const { email } = req.query;
+            const filter = { users: { $elemMatch: { email: email } }, isFriend: true };
+            const result = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
+            res.send(result);
+        });
+
+        // Get Searched Conversations
+        app.get('/search-conversations', async (req, res) => {
+            const { search, email } = req.query;
+            const filter = { users: { $elemMatch: { email: email } }, isFriend: true };
+            const conversations = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
+            const result = conversations.filter(conversation => conversation.users.find(user => user.email !== email).name.toLowerCase().includes(search.toLocaleLowerCase()));
+            res.send(result);
+        });
+
+        // Get single conversation by id
+        app.get('/conversation/:id', async (req, res) => {
+            const { id } = req.params;
+            const result = await conversationsCollection.findOne({ _id: ObjectId(id) });
+            res.send(result);
+        });
+
+        // Get Messages
+        app.get('/messages', async (req, res) => {
+            try {
+                const { conversationId } = req.query;
+                const filter = { conversationId: conversationId }
+                const isExist = await conversationsCollection.findOne({ _id: ObjectId(conversationId) });
+                if (isExist == null) {
+                    throw "Not found";
+                };
+                const result = await messagesCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
+                res.send(result);
+            }
+            catch (err) {
+                res.send(err);
+            }
+        });
+
         io.on("connection", (socket) => {
-
-
             socket.on('join', function (data) {
                 // console.log(data);
                 // io.emit('welcome', { mesage: `Welcome back ${data}` })
@@ -90,120 +274,6 @@ const run = async () => {
                 io.emit("new_user", [...activeUsers]);
             });
 
-
-
-            // Add user api
-            app.post('/users', async (req, res) => {
-                const user = req.body;
-                const result = await usersCollection.insertOne(user);
-                res.send(result);
-            });
-
-            // Get single user api
-            app.get('/user', async (req, res) => {
-                const email = req.query.email;
-                const query = { email: email }
-                const user = await usersCollection.findOne(query);
-                res.send(user);
-            });
-
-            // Get single user by username
-            app.get('/profile', async (req, res) => {
-                const username = req.query.username;
-                const query = { username: username }
-                const user = await usersCollection.findOne(query);
-                res.send(user);
-            });
-
-            // Update profile
-            app.post('/update-profile/:id', async (req, res) => {
-                const { id } = req.params;
-                const filter = { _id: ObjectId(id) };
-                const updatedDoc = {
-                    $set: req.body
-                }
-                try {
-                    const result = await usersCollection.updateOne(filter, updatedDoc);
-                    res.send(result);
-                }
-                catch (err) {
-                    throw new Error(err);
-                }
-            })
-            // Update profile Photo
-            app.post('/update-profile-photo/:id', async (req, res) => {
-                const { id } = req.params;
-                const filter = { _id: ObjectId(id) };
-                const updatedDoc = {
-                    $set: {
-                        img: req.body.img
-                    }
-                }
-                try {
-                    const result = await usersCollection.updateOne(filter, updatedDoc);
-                    res.send(result);
-                }
-                catch (err) {
-                    throw new Error(err);
-                }
-            })
-
-            // find friend api
-            app.get('/new-people', async (req, res) => {
-                const email = req.query.email;
-                const query = { email: email };
-                const currentUser = await usersCollection.findOne(query);
-                if (currentUser) {
-                    const friends = await friendsCollection.find().toArray();
-                    const neFilter = friends.filter(user => user.friendship.includes(currentUser.email)).map(user => user.friendship.filter(eml => eml !== currentUser.email)).map(email => email[0]);
-                    const users = await usersCollection.find({ email: { $nin: [...neFilter, email] } }).sort({ _id: -1 }).limit(7).toArray();
-                    const result = users.map(user => {
-                        return {
-                            name: user.name,
-                            email: user.email,
-                            username: user.username,
-                            _id: user._id,
-                            img: user.img
-                        }
-                    });
-                    res.send(result);
-                }
-                else {
-                    res.send({ code: 404 });
-                }
-            });
-            app.get('/find-people', async (req, res) => {
-                const email = req.query.email;
-                const query = { email: email };
-                const currentUser = await usersCollection.findOne(query);
-                if (currentUser) {
-                    const friends = await friendsCollection.find().toArray();
-                    const neFilter = friends.filter(user => user.friendship.includes(currentUser.email)).map(user => user.friendship.filter(eml => eml !== currentUser.email)).map(email => email[0]);
-                    const users = await usersCollection.find({ email: { $nin: [...neFilter, email] } }).toArray();
-                    const result = users.map(user => {
-                        return {
-                            name: user.name,
-                            email: user.email,
-                            username: user.username,
-                            _id: user._id,
-                            img: user.img
-                        }
-                    });
-                    res.send(result);
-                }
-                else {
-                    res.send({ code: 404 });
-                }
-            });
-
-            //  Get all requested friends
-            app.get('/requested-friends', async (req, res) => {
-                const { email } = req.query;
-                const friends = await friendsCollection.find().toArray();
-                const result = friends.filter(friend => friend.friendship.includes(email)).filter(f => f.status === 'pending');
-                res.send(result);
-            })
-
             // Send Friend Request
             app.post('/send-request', async (req, res) => {
                 const { currentUser, requestedPerson, conversationId } = req.body;
@@ -229,45 +299,6 @@ const run = async () => {
                     io.emit('newFriendReq', newFriend);
                     res.send(result);
                 }
-            });
-
-            // Get friend requests
-            app.get('/friend-request', async (req, res) => {
-                const { email } = req.query;
-                const query = { receiver: email };
-                const users = await friendsCollection
-                    .find(query)
-                    .sort({ timestamp: -1 })
-                    .toArray();
-                const result = users.filter(user => user.status === 'pending');
-                res.send(result);
-            });
-
-            // Accept Friend Request
-            app.put('/accept/:id', async (req, res) => {
-                const { id } = req.params;
-                const filter = { _id: ObjectId(id) }
-                const updateDoc = { status: 'friend' }
-                const unsetProperty = { requester: '', receiver: '', timestamp: '' }
-                const result = await friendsCollection.updateOne(filter, { $set: updateDoc, $unset: unsetProperty });
-                res.send(result);
-            });
-
-            // Cancel Friend friend Request
-            app.delete('/cancel/:id', async (req, res) => {
-                const { id } = req.params;
-                const query = { _id: ObjectId(id) }
-                const result = await friendsCollection.deleteOne(query)
-                res.send(result);
-            })
-
-            // Get all friends
-            app.get('/friends', async (req, res) => {
-                const { email } = req.query;
-                // console.log(email);
-                const filter = { friendship: email, status: 'friend' }
-                const result = await friendsCollection.find(filter).toArray();
-                res.send(result)
             });
 
 
@@ -302,23 +333,6 @@ const run = async () => {
 
             });
 
-            // Get conversations
-            app.get('/conversations', async (req, res) => {
-                const { email } = req.query;
-                const filter = { users: { $elemMatch: { email: email } }, isFriend: true };
-                const result = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
-                res.send(result);
-            });
-
-            // Get Searched Conversations
-            app.get('/search-conversations', async (req, res) => {
-                const { search, email } = req.query;
-                const filter = { users: { $elemMatch: { email: email } }, isFriend: true };
-                const conversations = await conversationsCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
-                const result = conversations.filter(conversation => conversation.users.find(user => user.email !== email).name.toLowerCase().includes(search.toLocaleLowerCase()));
-                res.send(result);
-            })
-
             // Update conversation last message
             app.put('/conversations/:id', async (req, res) => {
                 const { id } = req.params;
@@ -341,30 +355,6 @@ const run = async () => {
                 res.send(result)
 
             })
-
-            // Get single conversation by id
-            app.get('/conversation/:id', async (req, res) => {
-                const { id } = req.params;
-                const result = await conversationsCollection.findOne({ _id: ObjectId(id) });
-                res.send(result);
-            });
-
-            // Get Messages
-            app.get('/messages', async (req, res) => {
-                try {
-                    const { conversationId } = req.query;
-                    const filter = { conversationId: conversationId }
-                    const isExist = await conversationsCollection.findOne({ _id: ObjectId(conversationId) });
-                    if (isExist == null) {
-                        throw "Not found";
-                    };
-                    const result = await messagesCollection.find(filter, { sort: { timestamp: -1 } }).toArray();
-                    res.send(result);
-                }
-                catch (err) {
-                    res.send(err);
-                }
-            });
 
             // Send Message
             // socket.on('getMessage', async (messageInfo) => {
