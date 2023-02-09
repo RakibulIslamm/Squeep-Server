@@ -159,6 +159,14 @@ const run = async () => {
             res.send(result);
         });
 
+        //  Get all requested friends
+        app.get('/requested-friends', async (req, res) => {
+            const { email } = req.query;
+            const friends = await friendsCollection.find().toArray();
+            const result = friends.filter(friend => friend.friendship.includes(email)).filter(f => f.status === 'pending');
+            res.send(result);
+        })
+
         // Accept Friend Request
         app.put('/accept/:id', async (req, res) => {
             const { id } = req.params;
