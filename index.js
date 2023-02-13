@@ -99,6 +99,24 @@ const run = async () => {
             }
         });
 
+        // Update profile Photo
+        app.post('/update-cover-photo/:id', async (req, res) => {
+            const { id } = req.params;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    coverImg: req.body.img
+                }
+            }
+            try {
+                const result = await usersCollection.updateOne(filter, updatedDoc, { upsert: true });
+                res.send(result);
+            }
+            catch (err) {
+                throw new Error(err);
+            }
+        });
+
         // find friend api
         app.get('/new-people', async (req, res) => {
             const email = req.query.email;
