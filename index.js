@@ -382,6 +382,28 @@ const run = async () => {
 
             })
 
+            // Update conversation last seen
+            app.put('/last-seen/:id', async (req, res) => {
+                const { id } = req.params;
+                const data = req.body;
+                const filter = { _id: ObjectId(id) };
+                const updatedDoc = {
+                    $set: {
+                        lastSeen: {
+                            message: data.message,
+                            timestamp: data.timestamp,
+                            whoSeen: data.email
+                        }
+                    }
+                }
+                const result = await conversationsCollection.updateOne(filter, updatedDoc, { upsert: true });
+                // console.log(result);
+                if (result.modifiedCount) {
+                    io.emit("lastSeen", ({ data, id }));
+                }
+                res.send(result)
+            })
+
             // Send Message
             // socket.on('getMessage', async (messageInfo) => {
             //     try {
@@ -409,17 +431,24 @@ const run = async () => {
 
                 }
             });
+
             // Handle message Notification
-            socket.on('message-notification', async (id) => {
+            socket.on('message-notification', async ({ id, data }) => {
                 // console.log(id);
                 const filter = { _id: ObjectId(id) };
                 const updatedDoc = {
                     $set: {
-                        unseenMessages: 0
+                        unseenMessages: 0,
+                        lastSeen: {
+                            message: data.message,
+                            timestamp: data.timestamp,
+                            whoSeen: data.email
+                        }
                     }
                 }
-                const result = await conversationsCollection.updateOne(filter, updatedDoc);
+                const result = await conversationsCollection.updateOne(filter, updatedDoc, { upsert: true });
                 io.emit('message-notification-update', { result, id });
+                io.emit('lastSeen', { result, id, data });
             });
         });
 
